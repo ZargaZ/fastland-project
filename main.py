@@ -1,24 +1,40 @@
+import os
 from fastapi import FastAPI
 import psycopg2
-import os
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
+# Загружаем .env локально (на хостинге Render переменные окружения уже заданы)
 load_dotenv()
+
 DATABASE_URL = os.getenv("DATABASE_URL")
-print("DATABASE_URL =", DATABASE_URL)
+PORT = int(os.environ.get("PORT", 8000))
 
-app = FastAPI()
-conn = psycopg2.connect(DATABASE_URL, sslmode="require")  # SSL для Supabase
+app = FastAPI(title="FastLand Backend")
 
+# Подключение к базе данных
+def get_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode="require", cursor_factory=RealDictCursor)
+
+# Корневой маршрут
 @app.get("/")
 def root():
-    with conn.cursor() as cur:
-        cur.execute("SELECT NOW()")
-        return {"server": "FastLand backend", "time": cur.fetchone()[0]}
+    return {"server": "FastLand backend", "status": "running"}
 
+# Маршрут для клиентов
 @app.get("/clients")
 def get_clients():
-    with conn.cursor() as cur:
-        cur.execute("SELECT id, name, contact_person, phone FROM clients")
-        rows = cur.fetchall()
-        return [{"id": r[0], "name": r[1], "contact": r[2], "phone": r[3]} for r in rows]
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name, contact_person, phone FROM clients")
+            clients = cur.fetchall()
+        conn.close()
+        return clients
+    except Exception as e:
+        return {"error": str(e)}
+
+# Для запуска через python main.py
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=True)
