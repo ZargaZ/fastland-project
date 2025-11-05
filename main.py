@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 import psycopg2
 
-DATABASE_URL = "postgresql://postgres:Wasd3knopkI%7E@db.wenkfujkfqfuatgtqsmo.supabase.co:5432/postgres"
+DATABASE_URL = "postgresql://postgres:Wasd3knopkI%7E@aws-1-eu-west-1.pooler.supabase.com:6543/postgres"
 
 app = FastAPI()
 
@@ -30,3 +30,4 @@ def get_clients():
             return [{"id": r[0], "name": r[1], "contact": r[2], "phone": r[3]} for r in rows]
     else:
         return {"error": "DB not connected"}
+
