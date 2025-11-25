@@ -1746,16 +1746,22 @@ class LoginDialog(TextShortcutsMixin):
 # ======================= ОСНОВНОЕ ПРИЛОЖЕНИЕ =======================
 def _get_contract_tag_with_deadline(status, deadline):
     """Определить тег для цветового кодирования договора с учетом дедлайна"""
+    if not status:
+        return ''
+
+    # Нормализуем статус (приводим к нижнему регистру и убираем лишние пробелы)
+    status_normalized = str(status).strip().lower()
+
     # Черновики - прозрачный цвет (без тега)
-    if status == 'Черновик':
+    if status_normalized == 'черновик':
         return ''
 
     # ОТКЛОНЕННЫЕ договоры - красный цвет (высший приоритет)
-    if status == 'Отклонён' or status == 'Отклонен':
+    if status_normalized in ['отклонён', 'отклонен', 'rejected']:
         return 'rejected'
 
     # Если договор на согласовании и есть дедлайн
-    if status == 'На согласовании' and deadline:
+    if status_normalized == 'на согласовании' and deadline:
         try:
             deadline_dt = datetime.strptime(deadline, '%Y-%m-%d %H:%M:%S')
             current_dt = datetime.now()
@@ -1772,7 +1778,7 @@ def _get_contract_tag_with_deadline(status, deadline):
             return 'pending'
 
     # Для договоров не на согласовании используем стандартные теги
-    if status == 'Согласован':
+    if status_normalized == 'согласован':
         return 'approved'
 
     return 'pending'
@@ -2516,18 +2522,21 @@ class FastlandApp(TextShortcutsMixin):
                 if len(values) >= 10:  # Проверяем, что есть все значения
                     contract_id, number, title, counterparty, amount, status, dept, file_display, priority, deadline_str = values
 
-                    if isinstance(status, str):
-                        status_normalized = status.strip().lower()
-                    else:
-                        status_normalized = str(status).strip().lower()
+                    # Нормализуем статус
+                    status_normalized = str(status).strip().lower() if status else ''
+
+                    # ОТКЛОНЕННЫЕ договоры - красный цвет (высший приоритет)
+                    if status_normalized in ['отклонён', 'отклонен', 'rejected']:
+                        self.contracts_tree.item(item, tags=('rejected',))
+                        continue
 
                     # Черновики - прозрачный цвет (без тега)
-                    if status_normalized == 'Черновик':
+                    if status_normalized == 'черновик':
                         self.contracts_tree.item(item, tags=())
                         continue
 
                     # Если договор на согласовании и есть дедлайн
-                    if status_normalized == 'На согласовании' and deadline_str and deadline_str.strip():
+                    if status_normalized == 'на согласовании' and deadline_str and deadline_str.strip():
                         try:
                             # Преобразуем строку дедлайна в datetime
                             try:
@@ -2538,15 +2547,12 @@ class FastlandApp(TextShortcutsMixin):
                             if current_time > deadline_dt:
                                 # Просроченный договор - красный цвет
                                 self.contracts_tree.item(item, tags=('overdue',))
-                                log_message(f"Договор {number} помечен как просроченный")
                             elif (deadline_dt - current_time).total_seconds() <= 86400:  # 24 часа
                                 # Скоро дедлайн - оранжевый цвет
                                 self.contracts_tree.item(item, tags=('urgent',))
-                                log_message(f"Договор {number} помечен как срочный")
                             elif (deadline_dt - current_time).total_seconds() <= 259200:  # 3 дня
                                 # Приближается дедлайн - желтый цвет
                                 self.contracts_tree.item(item, tags=('warning',))
-                                log_message(f"Договор {number} помечен как предупреждение")
                             else:
                                 # Все в порядке - стандартный цвет для статуса "На согласовании"
                                 self.contracts_tree.item(item, tags=('pending',))
@@ -2556,8 +2562,10 @@ class FastlandApp(TextShortcutsMixin):
                             self.contracts_tree.item(item, tags=('pending',))
                     else:
                         # Для договоров не на согласовании используем стандартные теги
-                        tag = self._get_contract_tag(status_normalized)
-                        self.contracts_tree.item(item, tags=(tag,))
+                        if status_normalized == 'согласован':
+                            self.contracts_tree.item(item, tags=('approved',))
+                        else:
+                            self.contracts_tree.item(item, tags=('pending',))
 
         except Exception as e:
             log_message(f"Ошибка обновления цветов договоров: {e}")
